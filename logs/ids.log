@@ -1,0 +1,49 @@
+2025-05-02 00:06:03,705 - ids - INFO - Starting Intrusion Detection System
+2025-05-02 00:06:03,706 - ids - WARNING - No model found at C:\Users\Admin\OneDrive\Desktop\sem 6\Cybersecurity\ids project\models\trained_model.pkl, ML detection disabled
+2025-05-02 00:06:03,706 - ids - INFO - Starting packet capture on interface Ethernet
+2025-05-02 00:06:03,709 - ids - INFO - IDS is running. Press Ctrl+C to stop.
+2025-05-02 00:07:27,757 - ids - INFO - Shutting down...
+2025-05-02 00:07:27,758 - ids - INFO - Stopping packet capture
+2025-05-02 00:08:39,956 - ids - INFO - Starting Intrusion Detection System
+2025-05-02 00:08:39,959 - ids - WARNING - No model found at C:\Users\Admin\OneDrive\Desktop\sem 6\Cybersecurity\ids project\models\trained_model.pkl, ML detection disabled
+2025-05-02 00:08:39,961 - ids - INFO - Starting packet capture on interface Wi-Fi
+2025-05-02 00:08:39,965 - ids - INFO - IDS is running. Press Ctrl+C to stop.
+2025-05-02 00:13:47,065 - ids - INFO - Starting Intrusion Detection System
+2025-05-02 00:13:47,066 - ids - WARNING - No model found at C:\Users\Admin\OneDrive\Desktop\sem 6\Cybersecurity\ids project\models\trained_model.pkl, ML detection disabled
+2025-05-02 00:13:47,066 - ids - INFO - Starting packet capture on interface \Device\NPF_{AB724547-FAD6-4D6B-AA80-017413598829}
+2025-05-02 00:13:47,070 - ids - INFO - IDS is running. Press Ctrl+C to stop.
+2025-05-02 00:47:33,004 - ids - INFO - Shutting down...
+2025-05-02 00:47:33,371 - ids - INFO - Stopping packet capture
+2025-05-02 12:17:14,148 - ids - INFO - Starting Intrusion Detection System
+2025-05-02 12:17:14,149 - ids - WARNING - No model found at C:\Users\Admin\OneDrive\Desktop\sem 6\Cybersecurity\ids project\models\trained_model.pkl, ML detection disabled
+2025-05-02 12:17:14,149 - ids - INFO - Starting packet capture on interface \Device\NPF_{AB724547-FAD6-4D6B-AA80-017413598829}
+2025-05-02 12:17:14,151 - ids - INFO - IDS is running. Press Ctrl+C to stop.
+2025-05-02 12:17:14,151 - ids - INFO - Updating threat intelligence...
+2025-05-02 12:17:16,361 - ids - INFO - Loaded 10000 IPs from AbuseIPDB
+2025-05-02 12:17:16,585 - ids - INFO - Loaded 1422 ranges from Spamhaus
+2025-05-02 12:17:17,497 - ids - INFO - Loaded 499 IPs from Emerging Threats
+2025-05-02 12:17:17,772 - ids - WARNING - Failed to fetch AlienVault OTX data: 403
+2025-05-02 12:17:18,138 - ids - INFO - Loaded 4368 IP ranges from FireHOL
+2025-05-02 12:17:18,183 - ids - INFO - Threat intelligence updated. 10369 individual IPs and 5790 IP ranges loaded.
+2025-05-02 12:43:15,675 - ids - INFO - Shutting down...
+2025-05-02 12:43:15,700 - ids - INFO - Stopping packet capture
+2025-05-02 12:43:52,462 - ids - INFO - Starting Intrusion Detection System
+2025-05-02 12:43:52,607 - ids - WARNING - No model found at C:\Users\Admin\OneDrive\Desktop\sem 6\Cybersecurity\ids project\models\trained_model.pkl, ML detection disabled
+2025-05-02 12:43:52,609 - ids - INFO - Starting packet capture on interface \Device\NPF_{AB724547-FAD6-4D6B-AA80-017413598829}
+2025-05-02 12:43:52,613 - ids - INFO - IDS is running. Press Ctrl+C to stop.
+2025-05-02 12:43:52,710 - ids - INFO - Is 8.8.8.8 malicious? False
+2025-05-02 12:43:52,711 - ids - INFO - Simulating suspicious traffic...
+2025-05-02 12:46:14,267 - ids - INFO - Starting Intrusion Detection System
+2025-05-02 12:46:14,335 - ids - WARNING - No model found at C:\Users\Admin\OneDrive\Desktop\sem 6\Cybersecurity\ids project\models\trained_model.pkl, ML detection disabled
+2025-05-02 12:46:14,336 - ids - INFO - Starting packet capture on interface \Device\NPF_{AB724547-FAD6-4D6B-AA80-017413598829}
+2025-05-02 12:46:14,338 - ids - INFO - IDS is running. Press Ctrl+C to stop.
+2025-05-02 12:46:14,409 - ids - INFO - Is 8.8.8.8 malicious? False
+2025-05-02 12:46:14,410 - ids - INFO - Simulating suspicious traffic...
+2025-05-02 12:48:32,742 - ids - INFO - Starting Intrusion Detection System
+2025-05-02 12:48:32,806 - ids - WARNING - No model found at C:\Users\Admin\OneDrive\Desktop\sem 6\Cybersecurity\ids project\models\trained_model.pkl, ML detection disabled
+2025-05-02 12:48:32,807 - ids - INFO - Starting packet capture on interface \Device\NPF_{AB724547-FAD6-4D6B-AA80-017413598829}
+2025-05-02 12:48:32,809 - ids - INFO - IDS is running. Press Ctrl+C to stop.
+2025-05-02 12:48:32,866 - ids - INFO - Is 8.8.8.8 malicious? False
+2025-05-02 12:48:32,866 - ids - INFO - Simulating suspicious traffic...
+2025-05-02 12:58:56,240 - ids - INFO - Shutting down...
+2025-05-02 12:58:56,268 - ids - INFO - Stopping packet capture
