@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Network interface to monitor
-INTERFACE = os.environ.get('NETWORK_INTERFACE', 'Ethernet')  # Change as needed
+#INTERFACE = os.environ.get('NETWORK_INTERFACE', 'Wi-Fi')  # Change as needed
 
 # Threat Intelligence settings
 THREAT_INTEL_UPDATE_INTERVAL = 6  # hours
@@ -17,7 +17,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 THREAT_INTEL_DIR = os.path.join(DATA_DIR, 'threat_intel')
 LOGS_DIR = os.path.join(BASE_DIR, 'logs')
-MODEL_PATH = os.path.join(BASE_DIR, 'models', 'trained_model.pkl')
+MODEL_PATH = os.path.join(BASE_DIR, 'models', 'model_output', 'pca_model.pkl')
+
 
 # Ensure directories exist
 for directory in [DATA_DIR, THREAT_INTEL_DIR, LOGS_DIR]:

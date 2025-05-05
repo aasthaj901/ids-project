@@ -2,9 +2,10 @@ import pandas as pd
 import numpy as np
 import time
 import threading
-import pickle
+import joblib
 import logging
 import os
+from scapy.all import IP, TCP, UDP
 from config.settings import MODEL_PATH, ML_PROCESSING_INTERVAL
 
 logger = logging.getLogger('ids')
@@ -12,131 +13,221 @@ block_logger = logging.getLogger('blocked_traffic')
 
 class MLLayer:
     def __init__(self):
-        self.model = self._load_model()
+        self.model = None
+        self.scaler = None
+        self.feature_names = None
+        self._load_model_and_dependencies()
+        
         self.processing_thread = None
         self.running = False
-    
-    def _load_model(self):
-        """Load the ML model if it exists"""
-        if os.path.exists(MODEL_PATH):
-            logger.info(f"Loading ML model from {MODEL_PATH}")
-            try:
-                with open(MODEL_PATH, 'rb') as f:
-                    return pickle.load(f)
-            except Exception as e:
-                logger.error(f"Error loading model: {e}")
-                return None
-        else:
-            logger.warning(f"No model found at {MODEL_PATH}, ML detection disabled")
-            return None
-    
-    def extract_features(self, packet):
-        """Extract features from packet for ML model"""
-        features = {
-            'timestamp': time.time(),
-            'src_ip': packet[IP].src if packet.haslayer(IP) else None,
-            'dst_ip': packet[IP].dst if packet.haslayer(IP) else None,
-            'protocol': packet[IP].proto if packet.haslayer(IP) else None,
-            'size': len(packet),
-            'ttl': packet[IP].ttl if packet.haslayer(IP) else None,
-            # TCP specific features
-            'tcp_sport': packet[TCP].sport if packet.haslayer(TCP) else None,
-            'tcp_dport': packet[TCP].dport if packet.haslayer(TCP) else None,
-            'tcp_flags': str(packet[TCP].flags) if packet.haslayer(TCP) else None,
-            'tcp_window': packet[TCP].window if packet.haslayer(TCP) else None,
-            # UDP specific features
-            'udp_sport': packet[UDP].sport if packet.haslayer(UDP) else None,
-            'udp_dport': packet[UDP].dport if packet.haslayer(UDP) else None,
-            'udp_len': packet[UDP].len if packet.haslayer(UDP) else None,
-            # Add more features as needed
-        }
-        return features
-    
-    def preprocess_data(self, df):
-        """Preprocess the DataFrame for ML model"""
-        if df.empty:
-            return None
+        self.suspicious_ips = set()
+        self._lock = threading.Lock()
+        self.packet_buffer = []
+
+    def _load_model_and_dependencies(self):
+        """Load the trained ML model, scaler, and feature names from disk"""
+        model_dir = os.path.dirname(MODEL_PATH)
+        
+        try:
+            # Load the model
+            if os.path.exists(MODEL_PATH):
+                logger.info(f"[MLLayer] Loading ML model from {MODEL_PATH}")
+                self.model = joblib.load(MODEL_PATH)
+            else:
+                logger.warning(f"[MLLayer] No model found at {MODEL_PATH}, ML detection disabled")
+                return
             
-        # Handle missing values
-        df = df.fillna(0)
+            # Load the scaler
+            scaler_path = os.path.join(model_dir, "robust_scaler.pkl")
+            if os.path.exists(scaler_path):
+                logger.info(f"[MLLayer] Loading scaler from {scaler_path}")
+                self.scaler = joblib.load(scaler_path)
+            else:
+                logger.warning(f"[MLLayer] No scaler found. Feature scaling disabled.")
+            
+            # Load the feature names
+            features_path = os.path.join(model_dir, "feature_names.pkl")
+            if os.path.exists(features_path):
+                logger.info(f"[MLLayer] Loading feature names from {features_path}")
+                self.feature_names = joblib.load(features_path)
+            else:
+                logger.warning(f"[MLLayer] No feature names found. Using default feature extraction.")
+                
+            logger.info("[MLLayer] Successfully loaded model and dependencies")
+            
+        except Exception as e:
+            logger.error(f"[MLLayer] Error loading model or dependencies: {e}")
+            self.model = None
+
+    def extract_features(self, packet):
+        """Extract features from the network packet for ML use"""
+        if not packet.haslayer(IP):
+            return None
         
-        # Feature engineering could go here
+        # Basic packet info
+        features = {
+            'src_ip': packet[IP].src,
+            'dst_ip': packet[IP].dst,
+            'protocol_type_icmp': 1 if packet[IP].proto == 1 else 0,
+            'protocol_type_tcp': 1 if packet[IP].proto == 6 else 0,
+            'protocol_type_udp': 1 if packet[IP].proto == 17 else 0,
+            'duration': 0,  # Will be computed over time for a connection
+            'src_bytes': len(packet),
+            'dst_bytes': 0,  # Will be updated when we see reverse traffic
+            'land': 1 if packet[IP].src == packet[IP].dst else 0,
+            'wrong_fragment': 1 if packet[IP].frag != 0 else 0,
+            'urgent': 1 if packet.haslayer(TCP) and packet[TCP].flags & 0x20 else 0,
+        }
         
-        # Select the features your model was trained on
-        # This is a placeholder - adjust based on your actual model
-        model_features = [
-            'protocol', 'size', 'ttl', 'tcp_window',
-            'tcp_sport', 'tcp_dport', 'udp_sport', 'udp_dport'
-        ]
+        # TCP specific features
+        if packet.haslayer(TCP):
+            features.update({
+                'flag_S0': 1 if packet[TCP].flags == 0x02 else 0,  # SYN
+                'flag_SF': 1 if packet[TCP].flags & 0x01 else 0,   # FIN
+                'flag_REJ': 1 if packet[TCP].flags & 0x04 else 0,  # RST
+                'logged_in': 0,  # This requires session tracking
+                'count': 1,      # Simplified: need to track over time
+                'srv_count': 1,  # Simplified
+                'serror_rate': 0,
+                'srv_serror_rate': 0,
+                'rerror_rate': 0,
+                'srv_rerror_rate': 0,
+                'same_srv_rate': 1,  # Simplified
+                'diff_srv_rate': 0,
+                'srv_diff_host_rate': 0,
+                'dst_host_count': 1,  # Simplified
+                'dst_host_srv_count': 1,  # Simplified
+                'dst_host_same_srv_rate': 1,  # Simplified
+                'dst_host_diff_srv_rate': 0,
+                'dst_host_same_src_port_rate': 1,  # Simplified
+                'dst_host_srv_diff_host_rate': 0,
+                'dst_host_serror_rate': 0,
+                'dst_host_srv_serror_rate': 0,
+                'dst_host_rerror_rate': 0,
+                'dst_host_srv_rerror_rate': 0
+            })
+            
+        # Add zeroes for features we can't extract directly
+        for feature in self.feature_names:
+            if feature not in features:
+                features[feature] = 0
         
-        # Filter to only include features your model expects
-        available_features = [f for f in model_features if f in df.columns]
+        return features
+
+    def preprocess_packet_features(self, features_df):
+        """Preprocess the packet features to match what the model expects"""
+        if features_df.empty:
+            return pd.DataFrame()
+            
+        # Ensure we have all required features for the model
+        for feature in self.feature_names:
+            if feature not in features_df:
+                features_df[feature] = 0
+                
+        # Only keep features the model knows about
+        processed_df = features_df[self.feature_names]
         
-        return df[available_features]
-    
+        # Apply scaling if we have a scaler
+        if self.scaler:
+            # Find which columns were scaled during training
+            numeric_cols = [col for col in processed_df.columns 
+                           if col not in ['protocol_type_icmp', 'protocol_type_tcp', 'protocol_type_udp', 
+                                         'flag_S0', 'flag_SF', 'flag_REJ', 'land', 'logged_in']]
+            
+            if numeric_cols:
+                processed_df[numeric_cols] = self.scaler.transform(processed_df[numeric_cols])
+                
+        return processed_df
+
     def process_buffer(self, packet_buffer):
-        """Process a buffer of packets with the ML model"""
+        """Process packets and return a list of malicious source IPs"""
         if not self.model or not packet_buffer:
             return []
-            
+
         try:
-            # Convert to DataFrame
+            # Create DataFrame from packet features
             df = pd.DataFrame(packet_buffer)
-            
-            # Store the original IPs for blocking
-            src_ips = df['src_ip'].copy() if 'src_ip' in df.columns else []
-            
-            # Preprocess
-            df_processed = self.preprocess_data(df)
-            if df_processed is None or df_processed.empty:
+            if df.empty:
                 return []
+                
+            # Get source IPs for reference
+            src_ips = df['src_ip'].tolist() if 'src_ip' in df.columns else []
             
+            # Preprocess the data
+            df_processed = self.preprocess_packet_features(df)
+            if df_processed.empty:
+                return []
+
             # Make predictions
             predictions = self.model.predict(df_processed)
-            
-            # Find malicious packets
-            malicious_indices = [i for i, pred in enumerate(predictions) if pred == 1]
             malicious_ips = set()
-            
-            for idx in malicious_indices:
-                if idx < len(src_ips):
-                    ip = src_ips.iloc[idx]
-                    if ip and ip not in malicious_ips:
+
+            for idx, pred in enumerate(predictions):
+                if pred == 1 and idx < len(src_ips):  # 1 = attack, 0 = normal
+                    ip = src_ips[idx]
+                    if ip:
                         malicious_ips.add(ip)
-                        block_logger.info(f"ML model detected malicious traffic from {ip}")
-            
+                        block_logger.info(f"[MLLayer] Detected malicious traffic from {ip} via ML model")
+                        logger.warning(f"[MLLayer] Potential attack detected from {ip}")
+
             return list(malicious_ips)
             
         except Exception as e:
-            logger.error(f"Error in ML processing: {e}")
+            logger.error(f"[MLLayer] Error in ML processing: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
-    
-    def start_processing(self, packet_capture):
-        """Start background thread for ML processing"""
+
+    def add_packet_to_buffer(self, packet):
+        """Add a packet to the processing buffer"""
+        features = self.extract_features(packet)
+        if features:
+            with self._lock:
+                self.packet_buffer.append(features)
+
+    def start_processing(self, packet_capture=None):
+        """Start background thread to process packet buffer continuously"""
+        if not self.model:
+            logger.warning("[MLLayer] ML model is not loaded. Skipping processing thread.")
+            return
+
         self.running = True
-        
-        def processing_loop():
+
+        def worker():
             while self.running:
-                # Get the current buffer
-                buffer = packet_capture.get_and_clear_buffer()
+                # Process our own buffer
+                with self._lock:
+                    buffer = self.packet_buffer.copy()
+                    self.packet_buffer = []
                 
+                # Also process any buffer from packet capture if provided
+                if packet_capture:
+                    buffer.extend(packet_capture.get_and_clear_buffer())
+                
+                # Process the combined buffer
                 if buffer:
-                    # Process with ML model
                     malicious_ips = self.process_buffer(buffer)
-                    
-                    # Update threat intelligence with newly detected IPs
-                    for ip in malicious_ips:
-                        packet_capture.dpi_layer.threat_intel.malicious_ips.add(ip)
+                    with self._lock:
+                        for ip in malicious_ips:
+                            self.suspicious_ips.add(ip)
+                            if packet_capture and packet_capture.dpi_layer:
+                                packet_capture.dpi_layer.block_ip(ip)
                 
-                # Sleep for a bit
                 time.sleep(ML_PROCESSING_INTERVAL)
-        
-        self.processing_thread = threading.Thread(target=processing_loop)
-        self.processing_thread.daemon = True
+
+        self.processing_thread = threading.Thread(target=worker, daemon=True)
         self.processing_thread.start()
-    
+        logger.info("[MLLayer] ML processing thread started")
+
     def stop_processing(self):
-        """Stop the ML processing thread"""
         self.running = False
         if self.processing_thread:
             self.processing_thread.join(timeout=2)
+            logger.info("[MLLayer] ML processing thread stopped")
+
+    def get_suspicious_ips(self):
+        """Return and clear the set of detected suspicious IPs"""
+        with self._lock:
+            ips = list(self.suspicious_ips)
+            self.suspicious_ips.clear()
+            return ips

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network IDS Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="header">
+        <h1>Network IDS Dashboard</h1>
+        <div class="status-indicator">
+            <div class="status-dot"></div>
+            <span>System Active</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="dashboard-grid">
+            <div class="card">
+                <h2 class="card-title">
+                    System Statistics
+                    <button class="refresh-btn" onclick="refreshStats()">↻ Refresh</button>
+                </h2>
+                <div class="stat-grid">
+                    <div class="stat-box">
+                        <div class="stat-value" id="totalPackets">0</div>
+                        <div class="stat-label">Packets Analyzed</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="blockedIPs">0</div>
+                        <div class="stat-label">Blocked IPs</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card blocked-ips">
+                <h2 class="card-title">Blocked IPs</h2>
+                <div class="blocked-ip-card">
+                    <h3>Blocked IPs Overview</h3>
+                    <div id="blockedIPsList">
+                        <!-- Blocked IPs will be dynamically inserted here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="card dpi-summary">
+                <h2>DPI Analysis</h2>
+                <div class="stat-grid">
+                    <div class="stat-box">
+                        <div class="stat-value" id="dpiPackets">0</div>
+                        <div class="stat-label">DPI Packets Analyzed</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="dpiSuspiciousTraffic">0</div>
+                        <div class="stat-label">Suspicious Traffic Alerts</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ML Layer Stats -->
+            <div class="card ml-summary">
+                <h2>ML Analysis</h2>
+                <div class="stat-grid">
+                    <div class="stat-box">
+                        <div class="stat-value" id="mlPackets">0</div>
+                        <div class="stat-label">ML Packets Analyzed</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="mlSuspiciousTraffic">0</div>
+                        <div class="stat-label">Suspicious Traffic Alerts</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card log-container">
+            <h2 class="card-title">Live Traffic Simulation Logs</h2>
+            <div id="logArea"></div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const logArea = document.getElementById('logArea');
+        
+        // Initialize dashboard with zeros
+        document.addEventListener('DOMContentLoaded', function() {
+            // Request initial data from server if needed
+            socket.emit('request_initial_data');
+        });
+    
+        // Handle log updates
+        socket.on('log_update', function (data) {
+            const div = document.createElement('div');
+            div.className = 'log-entry info';
+            div.textContent = data.log;
+            logArea.appendChild(div);
+            logArea.scrollTop = logArea.scrollHeight;
+        });
+    
+        // Handle ML layer updates
+        socket.on('ml_update', function (data) {
+            document.getElementById('mlPackets').innerText = data.mlPackets;
+            document.getElementById('mlSuspiciousTraffic').innerText = data.suspiciousTraffic;
+            
+            // Update total packets count (combine DPI and ML)
+            updateTotalPackets();
+        });
+    
+        // Handle DPI layer updates
+        socket.on('dpi_update', function (data) {
+            document.getElementById('dpiPackets').innerText = data.dpiPackets;
+            document.getElementById('dpiSuspiciousTraffic').innerText = data.suspiciousTraffic;
+            
+            // Update total packets count (combine DPI and ML)
+            updateTotalPackets();
+        });
+        
+        // Handle blocked IPs updates
+        socket.on('blocked_ips_update', function (data) {
+            document.getElementById('blockedIPs').innerText = data.blockedIPsCount;
+            
+            // Update the blocked IPs list
+            const blockedIPsList = document.getElementById('blockedIPsList');
+            blockedIPsList.innerHTML = ''; // Clear current list
+            
+            data.blockedIPs.forEach(function(ipData) {
+                const ipEntry = document.createElement('div');
+                ipEntry.className = 'ip-entry';
+                
+                const ipAddress = document.createElement('span');
+                ipAddress.className = 'ip-address';
+                ipAddress.textContent = ipData.ip;
+                
+                const blockReason = document.createElement('div');
+                blockReason.className = 'block-reason';
+                blockReason.textContent = 'Reason: ' + ipData.reason;
+                
+                ipEntry.appendChild(ipAddress);
+                ipEntry.appendChild(blockReason);
+                blockedIPsList.appendChild(ipEntry);
+            });
+        });
+        
+        // Handle system stats updates (if separate from ML and DPI)
+        socket.on('system_stats_update', function (data) {
+            if (data.totalPackets) {
+                document.getElementById('totalPackets').innerText = data.totalPackets;
+            }
+            if (data.blockedIPsCount) {
+                document.getElementById('blockedIPs').innerText = data.blockedIPsCount;
+            }
+        });
+        
+        // Calculate total packets from ML and DPI data
+        function updateTotalPackets() {
+            const dpiPackets = parseInt(document.getElementById('dpiPackets').innerText) || 0;
+            const mlPackets = parseInt(document.getElementById('mlPackets').innerText) || 0;
+            document.getElementById('totalPackets').innerText = dpiPackets + mlPackets;
+        }
+    
+        // Refresh stats function - request fresh data from server
+        function refreshStats() {
+            socket.emit('request_stats_refresh');
+        }
+    </script>
+</body>
+</html>

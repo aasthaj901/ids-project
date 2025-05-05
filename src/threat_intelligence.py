@@ -12,37 +12,36 @@ from config.settings import (
 logger = logging.getLogger('ids')
 
 class ThreatIntelligence:
-    def __init__(self):
+    def __init__(self, use_cache_only=False):
         self.malicious_ips = set()
-        self.malicious_ip_ranges = []  # For CIDR notation
+        self.malicious_ip_ranges = []
         self.last_update = None
         self.update_interval = timedelta(hours=THREAT_INTEL_UPDATE_INTERVAL)
+        self.use_cache_only = use_cache_only
 
-        # Load cached data if available
         self._load_cached_data()
 
+        if not use_cache_only:
+            self.update_if_needed()
+
     def _load_cached_data(self):
-        """Load cached threat intelligence data"""
         ips_path = os.path.join(THREAT_INTEL_DIR, 'malicious_ips.txt')
         ranges_path = os.path.join(THREAT_INTEL_DIR, 'malicious_ranges.txt')
 
         if os.path.exists(ips_path):
             with open(ips_path, 'r') as f:
                 self.malicious_ips = set(line.strip() for line in f if line.strip())
-
-            # Get last modified time
             mod_time = os.path.getmtime(ips_path)
             self.last_update = datetime.fromtimestamp(mod_time)
 
         if os.path.exists(ranges_path):
             with open(ranges_path, 'r') as f:
                 self.malicious_ip_ranges = [
-                    ipaddress.ip_network(line.strip()) 
+                    ipaddress.ip_network(line.strip())
                     for line in f if line.strip()
                 ]
 
     def _save_cached_data(self):
-        """Save threat intelligence data to cache"""
         ips_path = os.path.join(THREAT_INTEL_DIR, 'malicious_ips.txt')
         ranges_path = os.path.join(THREAT_INTEL_DIR, 'malicious_ranges.txt')
 
@@ -55,14 +54,16 @@ class ThreatIntelligence:
                 f.write(f"{ip_range}\n")
 
     def update_if_needed(self):
-        """Update threat intelligence if it's time"""
+        if self.use_cache_only:
+            logger.info("Using cached threat intelligence only.")
+            return
+
         now = datetime.now()
         if self.last_update is None or (now - self.last_update) > self.update_interval:
             self.update_threat_intelligence()
             self.last_update = now
 
     def update_threat_intelligence(self):
-        """Update all threat intelligence sources"""
         logger.info("Updating threat intelligence...")
         self.malicious_ips.clear()
         self.malicious_ip_ranges.clear()
@@ -73,7 +74,6 @@ class ThreatIntelligence:
         self._update_alienvault_otx()
         self._update_firehol()
 
-        # Save to cache
         self._save_cached_data()
 
         logger.info(f"Threat intelligence updated. {len(self.malicious_ips)} individual IPs and {len(self.malicious_ip_ranges)} IP ranges loaded.")
@@ -184,9 +184,7 @@ class ThreatIntelligence:
             logger.error(f"Error updating FireHOL: {str(e)}")
 
     def is_malicious(self, ip_str):
-        """Check if an IP is in the malicious list"""
-        self.update_if_needed()
-
+        """Check if IP is malicious — now only uses loaded data"""
         if ip_str in self.malicious_ips:
             return True
 
